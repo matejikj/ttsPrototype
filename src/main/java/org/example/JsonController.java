@@ -6,6 +6,12 @@ import be.tarsos.dsp.PitchShifter;
 import be.tarsos.dsp.io.jvm.AudioDispatcherFactory;
 import be.tarsos.dsp.io.jvm.WaveformWriter;
 import be.tarsos.dsp.resample.RateTransposer;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.sound.sampled.AudioFormat;
@@ -13,18 +19,16 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.*;
 
 @RestController
-@RequestMapping("/api/tts")
-@Produces(MediaType.APPLICATION_JSON)
 public class JsonController {
 
     private static final int BUFFER_SIZE = 4096;
@@ -35,50 +39,49 @@ public class JsonController {
     private static final int SAMPLE_RATE = 22050;
 
     @SuppressWarnings("unchecked")
-    @POST
     @Consumes(MediaType.APPLICATION_JSON)
+    @PostMapping("/api/tts")
     @Produces({"audio/wav", MediaType.TEXT_PLAIN})
-    public Response create(@RequestBody RequestBodyModel requestBody, @Context final HttpHeaders headers, @Context final Request req) {
+    public ResponseEntity<?> create(@RequestBody RequestBodyModel requestBody, @RequestHeader HttpHeaders headers, HttpServletRequest req) {
         try {
-
             String outputFilePath = UUID.randomUUID() + ".wav";
             int exitCode = processConversion(requestBody.getText(), outputFilePath);
 
             if (exitCode != 0) {
-                return buildErrorResponse("Error during TTS conversion");
+                return new ResponseEntity<>("Error during TTS conversion", HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
-            processAudioFile(outputFilePath, Double.parseDouble("0.95"));
-            applyEffects(outputFilePath);
+//            processAudioFile(outputFilePath, Double.parseDouble("0.95"));
+//            applyEffects(outputFilePath);
 
             return buildResponse(outputFilePath, headers);
 
         } catch (Exception e) {
-            return buildErrorResponse("Exception occurred: " + e.getMessage());
+            return new ResponseEntity<>("Exception occurred: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    private Response buildResponse(String outputFilePath, HttpHeaders headers) {
-        String acceptHeader = headers.getHeaderString(HttpHeaders.ACCEPT);
-        if (MediaType.TEXT_PLAIN.equals(acceptHeader)) {
-            return Response.ok(new File(outputFilePath).getName(), MediaType.TEXT_PLAIN).build();
+    private ResponseEntity<?> buildResponse(String outputFilePath, HttpHeaders headers) throws IOException {
+        String acceptHeader = headers.getFirst(HttpHeaders.ACCEPT);
+
+        // If the client requests text/plain response
+        if (org.springframework.http.MediaType.TEXT_PLAIN_VALUE.equals(acceptHeader)) {
+            return new ResponseEntity<>(new File(outputFilePath).getName(), HttpStatus.OK);
         }
 
         File file = new File(outputFilePath);
         if (!file.exists()) {
-            return buildErrorResponse("Audio file not found");
+            return new ResponseEntity<>("Audio file not found", HttpStatus.NOT_FOUND);
         }
 
-        return Response.ok(file, "audio/wav")
-                .header("Content-Disposition", "attachment; filename=\"" + file.getName() + "\"")
-                .build();
-    }
+        // Serve the audio file as a byte stream
+        InputStreamResource resource = new InputStreamResource(new FileInputStream(file));
 
-    private Response buildErrorResponse(String message) {
-        return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                .entity(message)
-                .type(MediaType.TEXT_PLAIN)
-                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("audio/wav"))
+                .contentLength(file.length())
+                .body(resource);
     }
 
     @SuppressWarnings("squid:S4721")
@@ -88,8 +91,8 @@ public class JsonController {
         }
 
         ProcessBuilder processBuilder = new ProcessBuilder(
-                "etc/resources/piper/piper",
-                "--model", "etc/resources/piper/cs_CZ-jirka-medium.onnx",
+                "etc/resource/piper/piper",
+                "--model", "etc/resource/piper/cs_CZ-jirka-medium.onnx",
                 "--output_file", outputFilePath
         );
 

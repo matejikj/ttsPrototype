@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<project name="maven-antrun-" default="main"  >
+<target name="main">
+  <copy includeemptydirs="true" todir="/home/matejik/git/ttsPrototype/target/etc/resource/piper">
+    <fileset dir="etc/resource/piper">
+      <include name="**/*"/>
+    </fileset>
+  </copy>
+</target>
+</project>
