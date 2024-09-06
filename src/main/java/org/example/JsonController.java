@@ -51,8 +51,8 @@ public class JsonController {
                 return new ResponseEntity<>("Error during TTS conversion", HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
-//            processAudioFile(outputFilePath, Double.parseDouble("0.95"));
-//            applyEffects(outputFilePath);
+            processAudioFile(outputFilePath, Double.parseDouble("0.95"));
+            applyEffects(outputFilePath);
 
             return buildResponse(outputFilePath, headers);
 
@@ -91,8 +91,8 @@ public class JsonController {
         }
 
         ProcessBuilder processBuilder = new ProcessBuilder(
-                "etc/resource/piper/piper",
-                "--model", "etc/resource/piper/cs_CZ-jirka-medium.onnx",
+                System.getProperty("user.dir") + "/etc/resource/piper/piper",
+                "--model", System.getProperty("user.dir") + "/etc/resource/piper/cs_CZ-jirka-medium.onnx",
                 "--output_file", outputFilePath
         );
 
